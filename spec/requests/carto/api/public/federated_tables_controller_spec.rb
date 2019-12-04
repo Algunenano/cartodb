@@ -397,28 +397,77 @@ describe Carto::Api::Public::FederatedTablesController do
       end
     end
 
-    it 'returns 201 with the federated server was created' do
+    it 'returns 201 when the federated server was created (with a update instead of a register)' do
       federated_server_name = "fs_005_from_#{@user1.username}_to_remote"
-      payload_update_server = get_payload()
       params_update_server = { federated_server_name: federated_server_name, api_key: @user1.api_key }
-      put_json api_v4_federated_servers_update_server_url(params_update_server), payload_update_server do |response|
+      put_json api_v4_federated_servers_update_server_url(params_update_server), @payload_update_server do |response|
+        puts response
         expect(response.status).to eq(201)
         expect(response.headers['Content-Location']).to eq("/api/v4/federated_servers/#{federated_server_name}")
       end
-    end
 
-    it 'returns 204 with the federated server was updated' do
-      params_update_server = { federated_server_name: @federated_server_name, api_key: @user1.api_key }
-      put_json api_v4_federated_servers_update_server_url(params_update_server), @payload_update_server do |response|
+      params_unregister_table = { federated_server_name: federated_server_name, api_key: @user1.api_key }
+      delete_json api_v4_federated_servers_unregister_server_url(params_unregister_table) do |response|
         expect(response.status).to eq(204)
       end
     end
 
-    it 'returns 400 when payload is missing' do
+    it 'returns 204 when the federated server was updated' do
+      params_update_server = { federated_server_name: @federated_server_name, api_key: @user1.api_key }
+      put_json api_v4_federated_servers_update_server_url(params_update_server), @payload_update_server do |response|
+        puts response
+        expect(response.status).to eq(204)
+      end
+    end
+
+    xit 'is case insensitive with the name' do
+      params_update_server = { federated_server_name: @federated_server_name.upcase, api_key: @user1.api_key }
+      put_json api_v4_federated_servers_update_server_url(params_update_server), @payload_update_server do |response|
+        puts response
+        expect(response.status).to eq(204)
+      end
+    end
+
+    it 'returns 400 when the payload is missing' do
       params_update_server = { federated_server_name: @federated_server_name, api_key: @user1.api_key }
       payload_update_server = {}
       put_json api_v4_federated_servers_update_server_url(params_update_server), payload_update_server do |response|
         expect(response.status).to eq(400)
+      end
+    end
+
+    it 'returns 400 when mandatory parameters are missing' do
+      params_update_server = { federated_server_name: @federated_server_name, api_key: @user1.api_key }
+      invalid_payloads = [
+        { host: @remote_host, username: @remote_username, password: @remote_username },
+        { mode: 'read-only', username: @remote_username, password: @remote_username },
+        { mode: 'read-only', host: @remote_host, password: @remote_username },
+        { mode: 'read-only', host: @remote_host, username: @remote_username }
+      ]
+
+      for payload in invalid_payloads do
+        put_json api_v4_federated_servers_update_server_url(params_update_server), payload do |response|
+          expect(response.status).to eq(400)
+        end
+      end
+    end
+
+    xit 'returns 422 when trying to change the server name' do
+      params_update_server = { federated_server_name: @federated_server_name, api_key: @user1.api_key }
+      payload = get_payload("new name")
+
+      put_json api_v4_federated_servers_update_server_url(params_update_server), payload do |response|
+        puts response
+        expect(response.status).to eq(422)
+      end
+    end
+
+    it 'returns 422 when trying to change the mode to read-write' do
+      params_update_server = { federated_server_name: @federated_server_name, api_key: @user1.api_key }
+      payload = { mode: "read-write", host: @remote_host, username: @remote_username, password: @remote_username }
+
+      put_json api_v4_federated_servers_update_server_url(params_update_server), payload do |response|
+        expect(response.status).to eq(422)
       end
     end
 
