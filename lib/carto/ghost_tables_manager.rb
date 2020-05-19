@@ -8,6 +8,8 @@ module Carto
 
     def initialize(user_id)
       @user_id = user_id
+      @user_tables = fetch_user_tables
+      @cartodbfied_tables = fetch_cartodbfied_tables
     end
 
     def user
@@ -35,12 +37,9 @@ module Carto
 
     # determine linked tables vs cartodbfied tables consistency; i.e.: needs to run
     def user_tables_synced_with_db?
-      user_tables = fetch_user_tables
-      cartodbfied_tables = fetch_cartodbfied_tables
-
-      user_tables.length == cartodbfied_tables.length &&
-        (user_tables - cartodbfied_tables).empty? &&
-        (cartodbfied_tables - user_tables).empty?
+      @user_tables.length == @cartodbfied_tables.length &&
+        (@user_tables - @cartodbfied_tables).empty? &&
+        (@cartodbfied_tables - @user_tables).empty?
     end
 
     def get_bolt
@@ -69,10 +68,8 @@ module Carto
     # It's nice to run sync if any unsafe stale (dropped or renamed) tables will be shown to the user but we can't block
     # the workers for more that 180 seconds
     def should_run_synchronously?
-      cartodbfied_tables = fetch_cartodbfied_tables
-
-      dropped_and_stale_tables = find_dropped_tables(cartodbfied_tables) + find_stale_tables(cartodbfied_tables)
-      total_tables_to_be_linked = dropped_and_stale_tables + find_new_tables(cartodbfied_tables)
+      dropped_and_stale_tables = find_dropped_tables(@cartodbfied_tables) + find_stale_tables(@cartodbfied_tables)
+      total_tables_to_be_linked = dropped_and_stale_tables + find_new_tables(@cartodbfied_tables)
 
       dropped_and_stale_tables.count != 0 && total_tables_to_be_linked.count < MAX_TABLES_FOR_SYNC_RUN
     end
@@ -82,19 +79,17 @@ module Carto
     end
 
     def sync
-      cartodbfied_tables = fetch_cartodbfied_tables
-
       # Update table_id on UserTables with physical tables with changed oid. Should go first.
-      find_regenerated_tables(cartodbfied_tables).each(&:regenerate_user_table)
+      find_regenerated_tables(@cartodbfied_tables).each(&:regenerate_user_table)
 
       # Relink tables that have been renamed through the SQL API
-      find_renamed_tables(cartodbfied_tables).each(&:rename_user_table_vis)
+      find_renamed_tables(@cartodbfied_tables).each(&:rename_user_table_vis)
 
       # Create UserTables for non linked Tables
-      find_new_tables(cartodbfied_tables).each(&:create_user_table)
+      find_new_tables(@cartodbfied_tables).each(&:create_user_table)
 
       # Unlink tables that have been created through the SQL API. Should go last.
-      find_dropped_tables(cartodbfied_tables).each(&:drop_user_table)
+      find_dropped_tables(@cartodbfied_tables).each(&:drop_user_table)
     end
 
     # Any UserTable that has been renamed or regenerated.
@@ -104,30 +99,26 @@ module Carto
 
     # UserTables that coincide with a cartodbfied table in name but not id
     def find_renamed_tables(cartodbfied_tables)
-      user_tables = fetch_user_tables
-
       cartodbfied_tables.select do |cartodbfied_table|
-        user_tables.any?{|t| t.name != cartodbfied_table.name && t.id == cartodbfied_table.id}
+        @user_tables.any?{|t| t.name != cartodbfied_table.name && t.id == cartodbfied_table.id}
       end
     end
 
     # UserTables that coincide with a cartodbfied table in id but not in name
     def find_regenerated_tables(cartodbfied_tables)
-      user_tables = fetch_user_tables
-
       cartodbfied_tables.select do |cartodbfied_table|
-        user_tables.any?{|t| t.name == cartodbfied_table.name && t.id != cartodbfied_table.id}
+        @user_tables.any?{|t| t.name == cartodbfied_table.name && t.id != cartodbfied_table.id}
       end
     end
 
     # Cartodbfied tables that are not stale and are not linked as UserTables yet
     def find_new_tables(cartodbfied_tables)
-      cartodbfied_tables - fetch_user_tables - find_stale_tables(cartodbfied_tables)
+      cartodbfied_tables - @user_tables - find_stale_tables(cartodbfied_tables)
     end
 
     # UserTables that are not stale and have no cartodbfied table associated to it
     def find_dropped_tables(cartodbfied_tables)
-      fetch_user_tables - cartodbfied_tables - find_stale_tables(cartodbfied_tables)
+      @user_tables - cartodbfied_tables - find_stale_tables(cartodbfied_tables)
     end
 
     # Fetches all currently linked user tables
