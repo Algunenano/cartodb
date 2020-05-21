@@ -35,6 +35,7 @@ Development
 - Sync last login date ([#2788](https://github.com/CartoDB/cartodb-central/issues/2788))
 - Speed up Ghost Tables Manager checks.
 - Ghost Tables Manager: Unify both raster and non raster table checks into a single query.
+- Ghost Tables Manager: Don't do any synchronous check if the user has more than MAX_USERTABLES_FOR_SYNC_CHECK tables.
 
 4.37.0 (2020-04-24)
 -------------------
